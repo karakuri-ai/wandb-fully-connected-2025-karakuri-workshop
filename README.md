@@ -14,8 +14,8 @@
 ### 1. リポジトリのクローン
 
 ```bash
-git clone https://github.com/IkokObi/pre-wandb-fully-connected-2025-karakuri-workshop.git
-cd pre-wandb-fully-connected-2025-karakuri-workshop
+git clone https://github.com/karakuri-ai/wandb-fully-connected-2025-karakuri-workshop.git
+cd wandb-fully-connected-2025-karakuri-workshop
 ```
 
 ### 2. 依存関係のインストール
@@ -38,4 +38,8 @@ cp env.example .env
 
 ## カスタマーサポートAIの実装と解説
 
-WIP
+ワークショップにて使用するGoogle Colaboratoryは以下となります。
+
+<a href="https://colab.research.google.com/drive/1E89VWjPQRWcHvyIXWjt5MHqV5BiLnipz" target="_blank">
+<img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
+</a>
