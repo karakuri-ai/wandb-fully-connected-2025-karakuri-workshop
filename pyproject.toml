@@ -1,0 +1,72 @@
+[project]
+name = "fully-connected-2025-tokyo-karakuri-workshop"
+version = "0.1.0"
+description = "Fully Connected Tokyo 2025, Karakuri Workshop"
+authors = [
+    {name = "Koki Obinata", email = "k.obinata@karakuri.ai"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=0.3.27",
+    "langchain-openai>=0.3.33",
+    "langgraph>=0.6.7",
+    "pydantic>=2.11.9",
+    "pydantic-settings>=2.11.0",
+    "weave>=0.52.10",
+]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.405",
+    "ruff>=0.13.1",
+]
+app = [
+    "streamlit>=1.50.0",
+]
+notebook = [
+    "jupyter>=1.1.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D400", # missing-trailing-period: 名詞で表現する場合との相性が悪いため
+  "D415", # missing-terminal-punctuation: 名詞で表現する場合との相性が悪いため
+  "RUF001", # ambiguous-unicode-character-string: "ノ" と "/" などに対して指摘が出るため
+  "RUF002", # ambiguous-unicode-character-docstring: ドキュメントに対して指摘が出るため
+  "TD003", # missing-todo-link: TODOへのリンクは不要
+  "FIX002", # line-contains-todo: TODOを許容
+  # 以下、formatterとのconflictを避けるため
+  "COM812", # missing-trailing-comma
+  "ISC002", # multi-line-implicit-string-concatenation
+  "D203",   # incorrect-blank-line-before-class
+  "D212",   # multi-line-summary-first-line
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = [
+  "F401", # unused-import
+  "D104", # undocumented-public-package
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pyright]
+include = ["src"]
+venv = ".venv"

@@ -1,0 +1,27 @@
+{
+    "ignorePaths": [
+        ".gitignore"
+    ],
+    "words": [
+        "ainvoke",
+        "fastapi",
+        "fastmcp",
+        "httpx",
+        "ipython",
+        "isort",
+        "karakuri",
+        "Koki",
+        "langchain",
+        "langgraph",
+        "levelname",
+        "msecs",
+        "Obinata",
+        "pydantic",
+        "pyright",
+        "streamable",
+        "streamlit",
+        "uvicorn",
+        "venv",
+        "WANDB"
+    ]
+}
