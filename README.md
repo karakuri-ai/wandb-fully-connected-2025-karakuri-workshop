@@ -40,6 +40,6 @@ cp env.example .env
 
 ワークショップにて使用するGoogle Colaboratoryは以下となります。
 
-<a href="https://colab.research.google.com/drive/1E89VWjPQRWcHvyIXWjt5MHqV5BiLnipz" target="_blank">
+<a href="https://colab.research.google.com/drive/12lCi-a4nrq0y_0nt0Smq6uxDHuw981gu?usp=sharing" target="_blank">
 <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
