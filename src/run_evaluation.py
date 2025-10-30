@@ -15,10 +15,10 @@ from typing import Any
 
 import weave
 from openai import OpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from weave import Dataset, Evaluation, Model, Table
 
-from src.chat import chat
+from src.chat import chat_with_context
 from src.config import Config
 from src.prompts import (
     SYSTEM_PROMPT,
@@ -36,9 +36,7 @@ class ChatBotModel(Model):
     @weave.op()
     def predict(self, question: str) -> dict[str, Any]:
         """Return the pre-generated response for the given question ID."""
-        _ = question  # Unused but required by interface
-        response = chat([{"role": "user", "content": question}])
-        return {"generated_text": response.strip()}
+        return chat_with_context([{"role": "user", "content": question}])
 
 
 def load_evaluation_dataset(
@@ -57,17 +55,11 @@ def load_evaluation_dataset(
     return questions
 
 
-class JudgeResult(BaseModel):
-    """
-    Result schema produced by the judge LLM.
+class QAAccuracyResult(BaseModel):
+    """QAAccuracyResult schema"""
 
-    Fields follow the user's requested schema:
-    - reason: explanation in Japanese
-    - answer: 1, 2, or 3 (see rubric)
-    """
-
-    reason: str
-    answer: int
+    reason: str = Field(description="ボットの回答の適切性に関する理由")
+    answer: int = Field(description="回答の適切性")
 
 
 def loose_parse_json(content: str) -> dict[str, Any] | list[dict[str, Any]]:
@@ -84,7 +76,7 @@ def loose_parse_json(content: str) -> dict[str, Any] | list[dict[str, Any]]:
 class QAAccuracyScorer(weave.Scorer):
     """LLM-as-a-judge scorer for answer appropriateness."""
 
-    model_id: str = "gpt-4o"
+    model_id: str = "gpt-4.1"
     system_prompt: str = (
         "あなたは厳密な評価者です。指示に従い、日本語で簡潔かつ具体的に"
         "評価してください。"
@@ -110,9 +102,9 @@ class QAAccuracyScorer(weave.Scorer):
     c. 上記aとbのどちらでもないが、回答としては適切
         - 挨拶や雑談への対応など。
 2. 情報が不足しており、質問内容に答えられない。
-    - 参照情報からは回答できない、検索結果には答えられる情報がないなど。
+    a. 参照情報からは回答できない旨を伝えている。
 3. 回答を行ったが内容が不適切
-    - ユーザの意図を読み違えており、会話が噛み合っていないなど。
+    a. ユーザの意図を読み違えており、会話が噛み合っていないなど。
 # 入力
 ユーザの問い合わせ: {question}
 チャットボットの回答: {answer}
@@ -140,10 +132,10 @@ class QAAccuracyScorer(weave.Scorer):
         return parsed  # type: ignore[reportReturnType]
 
     @weave.op
-    def score(self, output: str, question: str) -> dict:  # type: ignore[reportIncompatibleVariableOverride]
+    def score(self, output: dict[str, Any], question: str) -> dict:  # type: ignore[reportIncompatibleVariableOverride]
         """Score appropriateness of `output` for the given question (in kwargs)."""
-        judged = self.call_judge(question=question, answer=output)
-        result = JudgeResult(
+        judged = self.call_judge(question=question, answer=output["generated_text"])
+        result = QAAccuracyResult(
             reason=str(judged.get("reason", "")),
             answer=int(judged.get("answer", 2)),
         )
@@ -151,10 +143,17 @@ class QAAccuracyScorer(weave.Scorer):
         return {"accuracy": result.model_dump()}
 
 
+class HallucinationResult(BaseModel):
+    """HallucinationResult schema"""
+
+    hallucination: float = Field(description="ハルシネーション割合")
+    details: list[dict[str, Any]] = Field(description="詳細結果")
+
+
 class ContextHallucinationScorer(weave.Scorer):
     """Check that assistant output does not contradict provided context."""
 
-    model_id: str = "gpt-4o"
+    model_id: str = "gpt-4.1"
 
     def __init__(self) -> None:
         """Initialize OpenAI client."""
@@ -162,12 +161,23 @@ class ContextHallucinationScorer(weave.Scorer):
         self._client = OpenAI()
 
     @staticmethod
-    def _build_context(question: str, answer: str) -> str:
-        messages = [
+    def _build_context(
+        question: str,
+        answer: str,
+        tool_messages: list[dict[str, str]],
+    ) -> str:
+        messages: list[dict[str, str]] = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": question},
-            {"role": "assistant", "content": answer},
         ]
+        # Insert tool messages as part of context if available
+        if tool_messages:
+            for t in tool_messages:
+                tool_name = t["tool"]
+                content = t["content"]
+                header = f"tool({tool_name})"
+                messages.append({"role": header, "content": content})
+        messages.append({"role": "assistant", "content": answer})
         return "\n\n".join(
             [f"role: {m['role']}\ncontent: {m['content']}" for m in messages]
         )
@@ -217,16 +227,25 @@ class ContextHallucinationScorer(weave.Scorer):
     @weave.op
     def score(self, output: dict[str, Any], question: str) -> dict:  # type: ignore[reportIncompatibleVariableOverride]
         """Produce verdicts by checking output against built context."""
-        context = self._build_context(question, output["generated_text"])
+        tool_msgs = output["context"]["tool_messages"]
+        context = self._build_context(question, output["generated_text"], tool_msgs)  # type: ignore[reportArgumentType]
         statements = self._extract_statements(output["generated_text"])
         verdicts = self._verify_against_context(statements, context)
-        return {"context_hallucination": {"verdicts": verdicts}}
+        return {
+            "context_hallucination": HallucinationResult(
+                hallucination=sum(v["validity"] == "0" for v in verdicts)
+                / len(verdicts)
+                if len(verdicts) > 0
+                else 0,
+                details=verdicts,
+            ).model_dump()
+        }
 
 
 class CommonSenseHallucinationScorer(weave.Scorer):
     """Check that assistant output aligns with common sense rules."""
 
-    model_id: str = "gpt-4o"
+    model_id: str = "gpt-4.1"
 
     def __init__(self) -> None:
         """Initialize OpenAI client."""
@@ -251,9 +270,33 @@ class CommonSenseHallucinationScorer(weave.Scorer):
         )
         return items  # type: ignore[reportReturnType]
 
+    @staticmethod
+    def _build_context(
+        question: str,
+        answer: str,
+        tool_messages: list[dict[str, str]],
+    ) -> str:
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": question},
+        ]
+        # Insert tool messages as part of context if available
+        if tool_messages:
+            for t in tool_messages:
+                tool_name = t["tool"]
+                content = t["content"]
+                header = f"tool({tool_name})"
+                messages.append({"role": header, "content": content})
+        messages.append({"role": "assistant", "content": answer})
+        return "\n\n".join(
+            [f"role: {m['role']}\ncontent: {m['content']}" for m in messages]
+        )
+
     @weave.op
-    def _verify_common_sense(self, statements: list[str]) -> list[dict[str, Any]]:
-        prompt = prompt_builder_for_common_sense_verification(statements)
+    def _verify_common_sense(
+        self, statements: list[str], context: str
+    ) -> list[dict[str, Any]]:
+        prompt = prompt_builder_for_common_sense_verification(statements, context)
         resp = self._client.chat.completions.create(
             model=self.model_id,
             messages=[
@@ -273,11 +316,21 @@ class CommonSenseHallucinationScorer(weave.Scorer):
         return parsed  # type: ignore[reportReturnType]
 
     @weave.op
-    def score(self, output: dict[str, Any]) -> dict:  # type: ignore[reportIncompatibleVariableOverride]
+    def score(self, output: dict[str, Any], question: str) -> dict:  # type: ignore[reportIncompatibleVariableOverride]
         """Produce verdicts by checking output against common sense rules."""
+        tool_msgs = output["context"]["tool_messages"]
+        context = self._build_context(question, output["generated_text"], tool_msgs)  # type: ignore[reportArgumentType]
         statements = self._extract_statements(output["generated_text"])
-        verdicts = self._verify_common_sense(statements)
-        return {"common_sense_hallucination": {"verdicts": verdicts}}
+        verdicts = self._verify_common_sense(statements, context)
+        return {
+            "common_sense_hallucination": HallucinationResult(
+                hallucination=sum(v["validity"] != "0" for v in verdicts)
+                / len(verdicts)
+                if len(verdicts) > 0
+                else 0,
+                details=verdicts,
+            ).model_dump()
+        }
 
 
 async def main() -> None:

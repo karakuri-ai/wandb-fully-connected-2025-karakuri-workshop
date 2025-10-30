@@ -20,7 +20,7 @@ import weave
 from openai import OpenAI
 from weave import Dataset, Evaluation, Model, Table
 
-from src.chat import chat
+from src.chat import chat_with_context
 from src.config import Config
 from src.prompts import prompt_builder_for_improvement_proposal
 
@@ -48,8 +48,7 @@ class ChatBotModel(Model):
     @weave.op()
     def predict(self, question: str) -> dict[str, Any]:
         """Return chatbot response for given question."""
-        response = chat([{"role": "user", "content": question}])
-        return {"generated_text": response.strip()}
+        return chat_with_context([{"role": "user", "content": question}])
 
 
 def load_questions(
@@ -75,7 +74,7 @@ class KnowledgeGapScorer(weave.Scorer):
     Output schema: {"knowledge_gap": {"flag": 0/1, "reason": str}}
     """
 
-    model_id: str = "gpt-4o"
+    model_id: str = "gpt-4.1"
 
     def __init__(self) -> None:
         """Initialize OpenAI client."""
@@ -86,11 +85,19 @@ class KnowledgeGapScorer(weave.Scorer):
     def score(self, output: dict[str, Any], question: str) -> dict:  # type: ignore[reportIncompatibleVariableOverride]
         """Return knowledge gap flag and reason using improvement prompt builder."""
         answer = str(output.get("generated_text", "")).strip()
-        conversation_text = (
-            f"role: system\ncontent: (omitted)\n\n"
-            f"role: user\ncontent: {question}\n\n"
-            f"role: assistant\ncontent: {answer}"
-        )
+        # Insert tool contexts if available between user and assistant
+        tool_msgs = output["context"]["tool_messages"]
+        blocks: list[str] = [
+            "role: system\ncontent: (omitted)",
+            f"role: user\ncontent: {question}",
+        ]
+        for t in tool_msgs:
+            tool_name = t["tool"]
+            content = t["content"]
+            header = f"tool({tool_name})"
+            blocks.append(f"role: {header}\ncontent: {content}")
+        blocks.append(f"role: assistant\ncontent: {answer}")
+        conversation_text = "\n\n".join(blocks)
         user_prompt = prompt_builder_for_improvement_proposal(conversation_text)
         resp = self._client.chat.completions.create(
             model=self.model_id,
