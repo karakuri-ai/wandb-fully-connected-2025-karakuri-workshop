@@ -21,7 +21,7 @@ cd wandb-fully-connected-2025-karakuri-workshop
 ### 2. 依存関係のインストール
 
 ```bash
-uv sync
+uv sync --all-groups
 ```
 
 ### 3. 環境変数の設定
@@ -33,8 +33,8 @@ cp env.example .env
 以下の値を設定してください。
 
 - OPENAI_API_KEY
-- WEAVE_PROJECT_NAME
 - WANDB_API_KEY
+- WEAVE_PROJECT_NAME
 
 ## カスタマーサポートAIの実装と解説
 
