@@ -1,4 +1,6 @@
-# W&amp;B Fully Connected Tokyo 2025｜Workshop by カラクリ
+# W&amp;B Fully Connected 2025｜Workshop - Karakuri
+
+[発表資料 (Speaker Deck)](https://speakerdeck.com/karakurist/w-and-b-fully-connected-2025-day1-workshop-karakuri)
 
 ## 環境構築
 
