@@ -1,8 +1,4 @@
-# pre-wandb-fully-connected-2025-karakuri-workshop
-【準備用】Weights &amp; Biases Fully Connected Tokyo 2025 / カラクリWorkshopリポジトリ
-
-
-# ワークショップ
+# W&amp;B Fully Connected Tokyo 2025｜Workshop by カラクリ
 
 ## 環境構築
 
